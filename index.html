@@ -96,7 +96,7 @@ const CAT_COLORS = {
 };
 
 let config = null;
-let state = { tasks: {}, hours: [], filter: 'all', search: '', collapsed: {}, showHoursForm: false, showSetup: false, syncStatus: 'loading', lastSync: null };
+let state = { tasks: {}, hours: [], filter: 'all', search: '', collapsed: {}, showHoursForm: false, showSetup: false, syncStatus: 'loading', syncError: '', lastSync: null };
 
 function loadConfig() {
   try { config = JSON.parse(localStorage.getItem(CFG_KEY)); } catch {}
@@ -170,29 +170,52 @@ function csvToTasks(rows) {
 async function fetchSheet() {
   if (!config || !config.sheetId) return false;
   state.syncStatus = 'loading';
+  state.syncError = '';
   render();
-  try {
-    // gviz endpoint supports CORS when sheet is published to web
-    const url = config.gid
-      ? `https://docs.google.com/spreadsheets/d/${config.sheetId}/gviz/tq?tqx=out:csv&gid=${config.gid}`
-      : `https://docs.google.com/spreadsheets/d/${config.sheetId}/gviz/tq?tqx=out:csv&sheet=${config.sheetName || 'tasks'}`;
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const text = await resp.text();
-    const rows = parseCSV(text);
-    if (rows.length === 0) throw new Error('Empty sheet');
-    state.tasks = csvToTasks(rows);
-    state.syncStatus = 'ok';
-    state.lastSync = Date.now();
-    cacheSheet(state.tasks);
-    render();
-    return true;
-  } catch (e) {
-    console.warn('Sheet fetch failed:', e);
-    state.syncStatus = 'err';
-    render();
-    return false;
+
+  // Try multiple URL formats
+  const urls = [];
+  if (config.gid) {
+    urls.push(`https://docs.google.com/spreadsheets/d/${config.sheetId}/gviz/tq?tqx=out:csv&gid=${config.gid}`);
+    urls.push(`https://docs.google.com/spreadsheets/d/${config.sheetId}/export?format=csv&gid=${config.gid}`);
   }
+  urls.push(`https://docs.google.com/spreadsheets/d/${config.sheetId}/gviz/tq?tqx=out:csv`);
+
+  for (const url of urls) {
+    try {
+      console.log('Trying:', url);
+      const resp = await fetch(url);
+      if (!resp.ok) { console.warn('HTTP ' + resp.status, url); continue; }
+      const text = await resp.text();
+      // gviz might return JSON error instead of CSV
+      if (text.startsWith('google.visualization') || text.startsWith('{')) {
+        console.warn('Got gviz JSON response, not CSV:', text.substring(0, 200));
+        continue;
+      }
+      const rows = parseCSV(text);
+      if (rows.length === 0) { console.warn('Empty CSV from', url); continue; }
+      // Verify we got real columns
+      const firstRow = rows[0];
+      if (!firstRow.task && !firstRow.category && !firstRow.id) {
+        console.warn('CSV missing expected columns. Got:', Object.keys(firstRow).join(', '));
+        continue;
+      }
+      state.tasks = csvToTasks(rows);
+      state.syncStatus = 'ok';
+      state.syncError = '';
+      state.lastSync = Date.now();
+      cacheSheet(state.tasks);
+      render();
+      return true;
+    } catch (e) {
+      console.warn('Fetch failed:', url, e.message);
+    }
+  }
+
+  state.syncStatus = 'err';
+  state.syncError = 'לא הצלחתי לקרוא מהשיטס. בדוק שהשיטס מפורסם (Publish to web) ושה-Sheet ID נכון.';
+  render();
+  return false;
 }
 
 // ============ WRITE BACK VIA N8N WEBHOOK ============
@@ -253,6 +276,7 @@ function render() {
   <div class="sync-status"><span class="sync-dot ${syncClass}"></span> ${syncClass === 'ok' ? 'מסונכרן' : syncClass === 'loading' ? 'טוען...' : 'שגיאת סנכרון'} | ${syncTime}</div>
   <button class="btn btn-cyan btn-sm" onclick="fetchSheet()">רענן</button>
 </div>
+${state.syncError ? `<div style="background:#451a03;border:1px solid #f97316;border-radius:8px;padding:10px;margin-bottom:16px;font-size:12px;color:#fed7aa">${state.syncError}<br><span style="color:#94a3b8;font-size:10px;direction:ltr;display:block;margin-top:4px">Sheet ID: ${config?.sheetId || '?'} | GID: ${config?.gid || 'none'}</span></div>` : ''}
 <div class="stats">
   <div class="stat" style="border-right:3px solid #3b82f6"><div class="stat-val" style="color:#3b82f6">${total}</div><div class="stat-lbl">סה״כ</div></div>
   <div class="stat" style="border-right:3px solid #10b981"><div class="stat-val" style="color:#10b981">${done} (${pct}%)</div><div class="stat-lbl">הושלמו</div></div>
