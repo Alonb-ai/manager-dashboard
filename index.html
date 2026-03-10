@@ -308,7 +308,8 @@ function render() {
     const catPct = tasks.length > 0 ? Math.round(catDone / tasks.length * 100) : 0;
     const isCol = state.collapsed[cat];
 
-    h += `<div class="category"><div class="cat-header" style="border-right:3px solid ${color}" onclick="toggleCat('${cat}')">
+    const safeCat = cat.replace(/'/g, "\\'");
+    h += `<div class="category"><div class="cat-header" style="border-right:3px solid ${color}" onclick="toggleCat('${safeCat}')">
     <div class="info"><span class="arrow" style="transform:rotate(${isCol ? '-90' : '0'}deg)">▼</span><span class="name">${cat}</span><span class="count">${catDone}/${tasks.length}</span></div>
     <div class="cat-progress"><div class="cat-bar"><div class="cat-fill" style="width:${catPct}%;background:${color}"></div></div><span class="cat-pct">${catPct}%</span></div>
     </div>`;
@@ -342,6 +343,7 @@ function saveSetup() {
   const webhookUrl = document.getElementById('cfg-webhook').value.trim();
   if (!sheetId) return alert('חסר Sheet ID');
   config = { sheetId, gid, sheetName: '', webhookUrl };
+  state.showSetup = false;
   saveConfig();
   fetchSheet();
 }
