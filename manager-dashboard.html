@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>Manager — לוח בקרה</title>
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiTWFuYWdlciBEYXNoYm9hcmQiLCJzaG9ydF9uYW1lIjoiTWFuYWdlciIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMGYxNzJhIiwidGhlbWVfY29sb3IiOiIjMGYxNzJhIn0=">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Heebo','Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;-webkit-tap-highlight-color:transparent}
+.container{max-width:960px;margin:0 auto;padding:16px}
+.header{background:linear-gradient(135deg,#1e293b,#334155);border-radius:16px;padding:20px;margin-bottom:16px;border:1px solid #475569}
+.header h1{font-size:22px;font-weight:900;color:#f8fafc}
+.header p{color:#94a3b8;font-size:13px;margin-top:6px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.stat{background:#1e293b;border-radius:10px;padding:12px 8px;text-align:center}
+.stat-val{font-size:20px;font-weight:700}
+.stat-lbl{font-size:11px;color:#94a3b8;margin-top:2px}
+.progress-wrap{background:#1e293b;border-radius:10px;padding:14px;margin-bottom:16px}
+.progress-header{display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px}
+.progress-bar{background:#334155;border-radius:6px;height:10px;overflow:hidden}
+.progress-fill{background:linear-gradient(90deg,#10b981,#06b6d4);height:100%;border-radius:6px;transition:width .3s}
+.hours-section{background:#1e293b;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #334155}
+.hours-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.hours-header h2{font-size:16px;font-weight:700;color:#06b6d4}
+.btn{border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600;font-size:12px;font-family:inherit}
+.btn-cyan{background:#06b6d4;color:#0f172a}
+.btn-green{background:#10b981;color:#fff}
+.btn-blue{background:#3b82f6;color:#fff}
+.hours-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.hours-form.wide{grid-template-columns:1fr 1fr 1fr}
+.form-group label{font-size:10px;color:#94a3b8;display:block;margin-bottom:3px}
+.form-group input,.form-group select{width:100%;background:#0f172a;border:1px solid #475569;border-radius:6px;padding:7px;color:#e2e8f0;font-size:12px;font-family:inherit}
+.hours-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+.hours-table th{text-align:right;padding:5px;color:#94a3b8;border-bottom:1px solid #334155}
+.hours-table td{padding:5px}
+.hours-summary{display:flex;gap:12px;font-size:12px;margin-top:10px;padding-top:10px;border-top:1px solid #334155;flex-wrap:wrap}
+.controls{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.search{flex:1;min-width:140px;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;font-family:inherit}
+.filter-btn{background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:12px;font-family:inherit}
+.filter-btn.active{background:#3b82f6;color:#fff;border-color:#3b82f6}
+.add-row{display:flex;gap:6px;margin-bottom:16px}
+.add-row select{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px;color:#e2e8f0;font-size:12px;font-family:inherit;max-width:140px}
+.add-row input{flex:1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;font-family:inherit}
+.category{margin-bottom:12px;background:#1e293b;border-radius:10px;overflow:hidden;border:1px solid #334155}
+.cat-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer}
+.cat-header .info{display:flex;align-items:center;gap:8px}
+.cat-header .arrow{font-size:11px;transition:transform .2s}
+.cat-header .name{font-weight:700;font-size:14px}
+.cat-header .count{font-size:11px;color:#64748b;background:#0f172a;border-radius:10px;padding:2px 8px}
+.cat-progress{display:flex;align-items:center;gap:6px}
+.cat-bar{width:60px;height:5px;background:#334155;border-radius:3px;overflow:hidden}
+.cat-fill{height:100%;border-radius:3px}
+.cat-pct{font-size:11px;color:#94a3b8;min-width:28px;text-align:left}
+.task-list{padding:0 14px 10px}
+.task{display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid #0f172a}
+.task input[type=checkbox]{width:16px;height:16px;cursor:pointer;flex-shrink:0}
+.task-text{flex:1;font-size:12px}
+.task-text.done{text-decoration:line-through;color:#475569}
+.badge{font-size:9px;border-radius:3px;padding:1px 5px;margin-right:4px;white-space:nowrap}
+.badge-green{background:#10b981;color:#fff}
+.badge-orange{background:#f97316;color:#fff}
+.del-btn{background:none;border:none;color:#475569;cursor:pointer;font-size:13px;padding:3px}
+.footer{text-align:center;padding:16px 0;color:#475569;font-size:11px}
+@media(max-width:600px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .hours-form{grid-template-columns:1fr 1fr}
+  .add-row{flex-wrap:wrap}
+  .add-row select{max-width:none;width:100%}
+}
+</style>
+</head>
+<body>
+<div class="container" id="app"></div>
+<script>
+const STORAGE_KEY='manager-dashboard-v2';
+const HOURS_KEY='manager-work-hours-v2';
+
+const DEFAULT_TASKS={"מיידי":{color:"#ef4444",tasks:[{id:1,text:"להוסיף כשירות וולדו אסיו וכו׳",done:false},{id:2,text:"ביטול - שעת ביטול 4/8/12 שעות, ביטול בשטח",done:false},{id:3,text:"טופס ביטול - מי ביטל, סיבת ביטול",done:false},{id:4,text:"משך טיסה, משך זמן בשטח, שעת המראה מתוכננת",done:false},{id:5,text:"הארכת משמרת בלובירד/לקוח",done:false},{id:6,text:"להוסיף באיחור מי איחר",done:false},{id:7,text:"לשנות מטיס חוץ ונהגים ליוזר במאנדיי",done:false},{id:8,text:"flight.flightDuration.split error",done:false},{id:9,text:"לעדכן db_config",done:false},{id:10,text:"כשירויות: סטטוס לשורת אייטם במאנדיי",done:false},{id:11,text:"תצוגת כרטיס לדיווחים אחרונים",done:false},{id:12,text:"מסמך הסבר לירון/יניר",done:false},{id:13,text:"שם לתוכנה",done:false},{id:14,text:"משך טיסה (חישוב)",done:false},{id:15,text:"בדיקת שם פלטפורמה אחיד",done:false}]},"באגים":{color:"#f97316",tasks:[{id:101,text:"הרשאות עריכה למשתמשים",done:false},{id:102,text:"פופאפ צפייה בדיווחים",done:false},{id:103,text:"כשירויות - חלק לעדכן חלק ליצור",done:false},{id:104,text:"אמלח בחיתוך מצב יומי יוצא ריק",done:false},{id:105,text:"פערי לוגיסטיקה במייל יוצא ריק",done:false},{id:106,text:"נהגים לא מתווספים לצוותי",done:false},{id:107,text:"בוטל/יצא ללא טיסות",done:false},{id:108,text:"ריווח שורות במייל סיכום",done:false},{id:109,text:"פערי לוגיסטיקה וסטטוס מטוסים",done:false},{id:110,text:"רום קיפאון - ממטרים לרגל",done:false},{id:111,text:"מזג אוויר באנגלית - clear",done:false},{id:112,text:"ביטול לא מפנה לטופס",done:false},{id:113,text:"לוודא פלטפורמות במאנדיי",done:false},{id:114,text:"נחיתה ידנית - qland/gamepad",done:false},{id:115,text:"הדרכה - סימולטור/שטח/קרקעי",done:false},{id:116,text:"כשירות הדרכה לפי סילבוס",done:false},{id:117,text:"מס״דים ומס״ז ספרות בלבד",done:false},{id:118,text:"שם האייטם מספר סידורי",done:false},{id:119,text:"תאנדר/וונדר - הסרת I level",done:false},{id:120,text:"מספר סידורי D/F/H",done:false},{id:121,text:"דיווח ביטול למאנדיי",done:false},{id:122,text:"תקלה פאולה",done:false},{id:123,text:"פופאפ שעות הפעלה מהר מדי",done:false},{id:124,text:"איחור בכרטיסיית טיסה",done:false},{id:125,text:"זיהוי כפילויות מילונים",done:false},{id:126,text:"נוטאם",done:false},{id:127,text:"דיווח חו״ל",done:false},{id:128,text:"הודעת פיתוח - אירועים חריגים",done:false},{id:129,text:"ריחוף בכל הודעת פיתוח",done:false},{id:130,text:"סילבוסים ממילון",done:false},{id:131,text:"עריכת רשימת בלוקים",done:false},{id:132,text:"שדות חדשים לא נשמרים",done:false},{id:133,text:"פופאפ שעות מפעילים",done:false},{id:134,text:"פורמס לוובהוק חדש",done:false},{id:135,text:"תיקונים קטנים בפורמס",done:false},{id:136,text:"דיווחי טיסה במאנדיי",done:false},{id:137,text:"טורים במאנדיי לדיווח חדש",done:false},{id:138,text:"סאבאייטם ניווט/תקשורת/בלוק",done:false},{id:139,text:"טכנאי ביצע המראה",done:false},{id:140,text:"כשירויות - חוזי",done:false},{id:141,text:"פיתוח - ביצע המראה/נחיתה",done:false},{id:142,text:"פורמס הדרכה",done:false},{id:143,text:"כשירות צריך רענון בצהוב",done:false},{id:144,text:"בדיקת פורמס בדיווח אמת",done:false},{id:145,text:"הגדרת מילונים",done:false},{id:146,text:"טורים חדשים במאנדיי",done:false},{id:147,text:"חישוב שעות מפעיל",done:false},{id:148,text:"מבנה דיווח יום טיסות חדש",done:false},{id:149,text:"תיקון פורמס הדרכה",done:false},{id:150,text:"פלואו חלק ב׳",done:false},{id:151,text:"הודעת רכזת רק במבצעי",done:false},{id:152,text:"עדכון מנהל הדרכה בטסט",done:false},{id:153,text:"ברירת מחדל בלוק 12.7.7",done:false},{id:154,text:"אפשרות 12/11 בבלוק",done:false},{id:155,text:"שמות לאיות אחד",done:false},{id:156,text:"דלק לתאנדר בלבד",done:false},{id:157,text:"משך טיסה ומשך חוזי",done:false},{id:158,text:"הוספת ביטול",done:false},{id:159,text:"וובהוק הזנת יום טיסות",done:false},{id:160,text:"מז״א מבצעי שדות",done:false},{id:161,text:"מעבר לסמס טווילו",done:false},{id:162,text:"Fuzzy לבחירה מהשיטס",done:true,v:true},{id:163,text:"פורמס דיווח שעות מתוכננות",done:false},{id:164,text:"מילוי אוטומטי פלטפורמה",done:false},{id:165,text:"באג פורמס הדרכה סילבוסים",done:false},{id:166,text:"מעבר לbase44",done:true,v:true},{id:167,text:"עזיבה של railway",done:true,v:true},{id:168,text:"פורמס ביצוע נחיתה",done:false},{id:169,text:"תבנית טווילו מסג׳",done:false},{id:170,text:"הודעה אחרי 12 שעות",done:false}]},"פיצ'רים עמר":{color:"#8b5cf6",tasks:[{id:201,text:"משך טיסה אחרי חצות",done:false},{id:202,text:"שעת המראה/נחיתה בטבלה",done:false}]},"פיצ'רים יובל לי":{color:"#3b82f6",tasks:[{id:301,text:"ליווי לקוחות",done:false},{id:302,text:"ימי טיסה חו״ל",done:false},{id:303,text:"סיורי שטח",done:false},{id:304,text:"ביטולי ימי טיסות",done:false},{id:305,text:"הסבת ימים שבוטלו",done:false},{id:306,text:"חלוקה של WBVT",done:false},{id:307,text:"רכזות תפעול",done:false},{id:308,text:"דו״ח משמרות",done:false},{id:309,text:"ביטולים מפורט",done:false},{id:310,text:"בוטל בשטח + עיכובים",done:false},{id:311,text:"שעות ביטול",done:false}]},"טווח קרוב":{color:"#06b6d4",tasks:[{id:401,text:"פורמס חניכים לבלוסום",done:false},{id:402,text:"עדכון טופס ביטול",done:false},{id:403,text:"פילטר AI לדיווחים",done:false},{id:404,text:"מנוע שיבוץ (עם עמר)",done:false},{id:405,text:"דיווח חו״ל",done:false}]},"טווח רחוק":{color:"#64748b",tasks:[{id:501,text:"תכנית שבועית + כשירויות",done:false},{id:502,text:"ממשוק לאתניקס",done:false},{id:503,text:"גאנט",done:false},{id:504,text:"מעקב שמישות מטוסים",done:false},{id:505,text:"חתימה על ציוד",done:false},{id:506,text:"העברה מהמאנדיי",done:false},{id:507,text:"הפעלת יום טיסות מהאפליקציה",done:false},{id:508,text:"עדכון בזמן אמת למפעיל",done:false}]},"Production":{color:"#10b981",tasks:[{id:601,text:"שלב 8 - התראות n8n",done:false},{id:602,text:"שלב 9 - טסטים",done:false},{id:603,text:"שלב 10 - deploy",done:false},{id:604,text:"שלב 11 - post-release",done:false},{id:605,text:"env vars Base44",done:false}]},"n8n אימות":{color:"#d946ef",tasks:[{id:701,text:"Weather chain fix",done:true,v:true},{id:702,text:"wakeup12 / 20:00 trigger",done:false,n:"חסר בקוד"},{id:703,text:"Blossom KC integration",done:false,n:"חסר בקוד"},{id:704,text:"UAVScheduler webhooks",done:true,v:true},{id:705,text:"Prepare_Subitems",done:true,v:true},{id:706,text:"Calculate_Status Cron",done:true,v:true},{id:707,text:"Operator Dashboard",done:false,n:"חסר בקוד"},{id:708,text:"useURLState + Base44",done:true,v:true}]}};
+
+let state={tasks:null,hours:[],filter:'all',search:'',collapsed:{},showHoursForm:false};
+
+function load(){
+  try{state.tasks=JSON.parse(localStorage.getItem(STORAGE_KEY))}catch{}
+  if(!state.tasks)state.tasks=JSON.parse(JSON.stringify(DEFAULT_TASKS));
+  try{state.hours=JSON.parse(localStorage.getItem(HOURS_KEY))||[]}catch{state.hours=[]}
+}
+
+function save(){
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state.tasks))}catch{}
+  try{localStorage.setItem(HOURS_KEY,JSON.stringify(state.hours))}catch{}
+}
+
+function getAllTasks(){
+  let all=[];
+  for(let[cat,{tasks}]of Object.entries(state.tasks)){
+    for(let t of tasks)all.push({...t,category:cat});
+  }
+  return all;
+}
+
+function render(){
+  const all=getAllTasks();
+  const total=all.length,done=all.filter(t=>t.done).length;
+  const pct=total>0?Math.round(done/total*100):0;
+  const totalHours=state.hours.reduce((s,e)=>s+(parseFloat(e.hours)||0),0);
+  const daysWorked=new Set(state.hours.map(e=>e.date)).size;
+  const deadline=new Date('2026-03-31'),today=new Date();
+  const daysLeft=Math.max(0,Math.ceil((deadline-today)/(864e5)));
+  const remaining=total-done;
+  const pace=daysLeft>0?(remaining/daysLeft).toFixed(1):'∞';
+
+  let h=`
+<div class="header">
+  <h1>Manager App — לוח בקרה</h1>
+  <p>דדליין: 31.03.2026 | ${daysLeft} ימים נותרו</p>
+</div>
+<div class="stats">
+  <div class="stat" style="border-right:3px solid #3b82f6"><div class="stat-val" style="color:#3b82f6">${total}</div><div class="stat-lbl">סה״כ</div></div>
+  <div class="stat" style="border-right:3px solid #10b981"><div class="stat-val" style="color:#10b981">${done} (${pct}%)</div><div class="stat-lbl">הושלמו</div></div>
+  <div class="stat" style="border-right:3px solid #f97316"><div class="stat-val" style="color:#f97316">${remaining}</div><div class="stat-lbl">נותרו</div></div>
+  <div class="stat" style="border-right:3px solid #d946ef"><div class="stat-val" style="color:#d946ef">${pace}/יום</div><div class="stat-lbl">קצב נדרש</div></div>
+  <div class="stat" style="border-right:3px solid #06b6d4"><div class="stat-val" style="color:#06b6d4">${totalHours.toFixed(1)}</div><div class="stat-lbl">שעות עבודה</div></div>
+  <div class="stat" style="border-right:3px solid #8b5cf6"><div class="stat-val" style="color:#8b5cf6">${daysWorked}</div><div class="stat-lbl">ימים</div></div>
+</div>
+<div class="progress-wrap">
+  <div class="progress-header"><span>התקדמות כללית</span><span style="color:#10b981;font-weight:700">${pct}%</span></div>
+  <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+</div>`;
+
+  // Work hours section
+  h+=`<div class="hours-section">
+  <div class="hours-header"><h2>שעות עבודה</h2><button class="btn btn-cyan" onclick="toggleHoursForm()">${state.showHoursForm?'ביטול':'+ שעות'}</button></div>`;
+  if(state.showHoursForm){
+    h+=`<div class="hours-form">
+    <div class="form-group"><label>תאריך</label><input type="date" id="h-date" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="form-group"><label>שעות</label><input type="number" id="h-hours" step="0.5" min="0" max="16" placeholder="3.5" style="direction:ltr"></div>
+    <div class="form-group"><label>מיקום</label><select id="h-loc"><option>בית</option><option>משרד</option><option>שטח</option></select></div>
+    <div class="form-group"><label>הערות</label><input type="text" id="h-notes" placeholder="מה עבדת עליו..."></div>
+    </div><button class="btn btn-green" onclick="addHours()" style="width:100%;margin-bottom:8px">שמור</button>`;
+  }
+  if(state.hours.length>0){
+    h+=`<div style="max-height:180px;overflow-y:auto"><table class="hours-table"><thead><tr><th>תאריך</th><th style="text-align:center">שעות</th><th style="text-align:center">מיקום</th><th>הערות</th><th></th></tr></thead><tbody>`;
+    for(let e of[...state.hours].reverse()){
+      h+=`<tr><td>${e.date}</td><td style="text-align:center;color:#06b6d4;font-weight:600">${e.hours}</td><td style="text-align:center">${e.location}</td><td style="color:#94a3b8">${e.notes||''}</td><td><button class="del-btn" onclick="delHours(${e.id})">✕</button></td></tr>`;
+    }
+    h+=`</tbody></table></div>`;
+  }
+  const avg=daysWorked>0?(totalHours/daysWorked).toFixed(1):'0';
+  h+=`<div class="hours-summary"><span>סה״כ: <b style="color:#06b6d4">${totalHours.toFixed(1)} שעות</b></span><span>ממוצע: <b style="color:#8b5cf6">${avg} שעות/יום</b></span></div></div>`;
+
+  // Search & filter
+  h+=`<div class="controls">
+  <input class="search" placeholder="חיפוש..." value="${state.search}" oninput="setSearch(this.value)">
+  <button class="filter-btn ${state.filter==='all'?'active':''}" onclick="setFilter('all')">הכל</button>
+  <button class="filter-btn ${state.filter==='open'?'active':''}" onclick="setFilter('open')">פתוחות</button>
+  <button class="filter-btn ${state.filter==='done'?'active':''}" onclick="setFilter('done')">הושלמו</button>
+  </div>`;
+
+  // Add task
+  h+=`<div class="add-row">
+  <select id="new-cat"><option value="">קטגוריה...</option>`;
+  for(let cat of Object.keys(state.tasks))h+=`<option value="${cat}">${cat}</option>`;
+  h+=`</select><input id="new-text" placeholder="משימה חדשה..." onkeydown="if(event.key==='Enter')addTask()">
+  <button class="btn btn-green" onclick="addTask()">+ הוסף</button></div>`;
+
+  // Categories
+  for(let[cat,{color,tasks}]of Object.entries(state.tasks)){
+    const filtered=tasks.filter(t=>{
+      if(state.filter==='open'&&t.done)return false;
+      if(state.filter==='done'&&!t.done)return false;
+      if(state.search&&!t.text.includes(state.search))return false;
+      return true;
+    });
+    if(filtered.length===0&&state.search)continue;
+    const catDone=tasks.filter(t=>t.done).length;
+    const catPct=tasks.length>0?Math.round(catDone/tasks.length*100):0;
+    const isCol=state.collapsed[cat];
+
+    h+=`<div class="category"><div class="cat-header" style="border-right:3px solid ${color}" onclick="toggleCat('${cat}')">
+    <div class="info"><span class="arrow" style="transform:rotate(${isCol?'-90':'0'}deg)">▼</span><span class="name">${cat}</span><span class="count">${catDone}/${tasks.length}</span></div>
+    <div class="cat-progress"><div class="cat-bar"><div class="cat-fill" style="width:${catPct}%;background:${color}"></div></div><span class="cat-pct">${catPct}%</span></div>
+    </div>`;
+    if(!isCol){
+      h+=`<div class="task-list">`;
+      for(let t of filtered){
+        h+=`<div class="task">
+        <input type="checkbox" ${t.done?'checked':''} onchange="toggle(${t.id})" style="accent-color:${color}">
+        <span class="task-text ${t.done?'done':''}">${t.text}`;
+        if(t.v)h+=` <span class="badge badge-green">אומת ✓</span>`;
+        if(t.n)h+=` <span class="badge badge-orange">${t.n}</span>`;
+        h+=`</span><button class="del-btn" onclick="del(${t.id})">✕</button></div>`;
+      }
+      if(filtered.length===0)h+=`<p style="color:#475569;font-size:12px;padding:6px">אין משימות</p>`;
+      h+=`</div>`;
+    }
+    h+=`</div>`;
+  }
+
+  h+=`<div class="footer">Manager Dashboard — ${new Date().toLocaleDateString('he-IL')}</div>`;
+  document.getElementById('app').innerHTML=h;
+}
+
+function toggle(id){
+  for(let cat of Object.values(state.tasks)){
+    for(let t of cat.tasks){if(t.id===id){t.done=!t.done;break}}
+  }
+  save();render();
+}
+function del(id){
+  for(let cat of Object.values(state.tasks)){
+    cat.tasks=cat.tasks.filter(t=>t.id!==id);
+  }
+  save();render();
+}
+function addTask(){
+  const catEl=document.getElementById('new-cat'),textEl=document.getElementById('new-text');
+  if(!catEl.value||!textEl.value.trim())return;
+  const allIds=Object.values(state.tasks).flatMap(c=>c.tasks.map(t=>t.id));
+  const maxId=Math.max(...allIds,0);
+  state.tasks[catEl.value].tasks.push({id:maxId+1,text:textEl.value.trim(),done:false});
+  textEl.value='';save();render();
+}
+function setFilter(f){state.filter=f;render()}
+function setSearch(v){state.search=v;render()}
+function toggleCat(c){state.collapsed[c]=!state.collapsed[c];render()}
+function toggleHoursForm(){state.showHoursForm=!state.showHoursForm;render()}
+function addHours(){
+  const d=document.getElementById('h-date').value;
+  const hrs=document.getElementById('h-hours').value;
+  const loc=document.getElementById('h-loc').value;
+  const notes=document.getElementById('h-notes').value;
+  if(!hrs)return;
+  state.hours.push({id:Date.now(),date:d,hours:hrs,location:loc,notes});
+  state.showHoursForm=false;save();render();
+}
+function delHours(id){state.hours=state.hours.filter(e=>e.id!==id);save();render()}
+
+load();render();
+</script>
+</body>
+</html>
