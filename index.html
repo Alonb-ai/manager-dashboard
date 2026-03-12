@@ -356,6 +356,8 @@ body {
   .container { padding: 12px; }
 }
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 </head>
 <body>
 <div class="container" id="app"></div>
@@ -363,12 +365,6 @@ body {
 // ============ CONFIG ============
 const CFG_KEY = 'manager-config';
 const HOURS_KEY = 'manager-work-hours-v2';
-const CACHE_KEY = 'manager-sheet-cache';
-
-const DEFAULT_SHEET_ID = '16xVG6xHsrilXv5I1n-jPS49ka5Dz9Cr1f1e8PDZB2SA';
-const DEFAULT_GID = '1985634719';
-const DEFAULT_PUB_KEY = '2PACX-1vTV8NzgFdxt_mjW1MzZMVCX0CHuKkjYwQsc6j8IswgO2l8K_nAYUkzDPtMIOdHZEQxZkxiHoM7cK3gU';
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw6TW4jymmpX_TjyypwcKbBCFl8LbI_4Ly6Lr8kr0ZJ4LgvOBMIY-0XEnXAk_gWOy6eow/exec';
 
 const CAT_COLORS = {
   'מיידי':'#c76a6a','באגים':'#d4a853',"פיצ'רים עמר":'#9b8ec4',
@@ -379,15 +375,15 @@ const CAT_COLORS = {
 let config = null;
 let state = { tasks: {}, hours: [], filter: 'all', search: '', collapsed: {}, showHoursForm: false, showSetup: false, syncStatus: 'loading', syncError: '', lastSync: null };
 
+const DEFAULT_DB_URL = 'https://manager-dashboard-b8627-default-rtdb.firebaseio.com';
+const DEFAULT_API_KEY = 'AIzaSyCYVWc3_hOJadijX6Ebclz5VCEWthhuw8w';
+const DEFAULT_PROJECT_ID = 'manager-dashboard-b8627';
+const DEFAULT_APP_ID = '1:1062866166372:web:7d0e514cd12b357e89b571';
+
 function loadConfig() {
   try { config = JSON.parse(localStorage.getItem(CFG_KEY)); } catch {}
-  if (!config || !config.sheetId) {
-    config = { sheetId: DEFAULT_SHEET_ID, gid: DEFAULT_GID, pubKey: DEFAULT_PUB_KEY, sheetName: '', webhookUrl: '' };
-    saveConfig();
-  }
-  if (!config.gid || !config.pubKey) {
-    config.gid = config.gid || DEFAULT_GID;
-    config.pubKey = config.pubKey || DEFAULT_PUB_KEY;
+  if (!config || !config.databaseURL) {
+    config = { databaseURL: DEFAULT_DB_URL, apiKey: DEFAULT_API_KEY, projectId: DEFAULT_PROJECT_ID, appId: DEFAULT_APP_ID };
     saveConfig();
   }
 }
@@ -400,182 +396,91 @@ function loadHours() {
 function saveHours() {
   try { localStorage.setItem(HOURS_KEY, JSON.stringify(state.hours)); } catch {}
 }
-function cacheSheet(tasks) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ tasks, ts: Date.now() })); } catch {}
-}
-function loadCache() {
-  try {
-    const c = JSON.parse(localStorage.getItem(CACHE_KEY));
-    if (c && c.tasks) { state.tasks = c.tasks; state.lastSync = c.ts; return true; }
-  } catch {}
-  return false;
-}
+// ============ FIREBASE DATA LAYER ============
+let db = null;
 
-// ============ CSV PARSER ============
-function parseCSV(text) {
-  const lines = text.split('\n').filter(l => l.trim());
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^\uFEFF/, ''));
-  return lines.slice(1).map(line => {
-    const vals = [];
-    let cur = '', inQ = false;
-    for (let ch of line) {
-      if (ch === '"') { inQ = !inQ; }
-      else if (ch === ',' && !inQ) { vals.push(cur.trim()); cur = ''; }
-      else { cur += ch; }
+function initFirebase() {
+  if (!config || !config.databaseURL) return;
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
+      apiKey: config.apiKey || '',
+      databaseURL: config.databaseURL,
+      projectId: config.projectId || '',
+      appId: config.appId || ''
+    });
+  }
+  db = firebase.database();
+  state.syncStatus = 'loading';
+  render();
+
+  // Real-time listener — auto-syncs across devices
+  db.ref('tasks').on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      state.tasks = firebaseToTasks(data);
+    } else {
+      state.tasks = {};
     }
-    vals.push(cur.trim());
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = vals[i] || ''; });
-    return obj;
+    state.syncStatus = 'ok';
+    state.syncError = '';
+    state.lastSync = Date.now();
+    render();
+  }, (err) => {
+    console.error('Firebase read error:', err.message);
+    state.syncStatus = 'err';
+    state.syncError = 'שגיאת קריאה: ' + err.message;
+    render();
   });
 }
 
-function csvToTasks(rows) {
+function firebaseToTasks(data) {
   const cats = {};
-  for (const r of rows) {
-    const cat = r.category || 'אחר';
+  for (const [id, t] of Object.entries(data)) {
+    const cat = t.category || 'אחר';
     if (!cats[cat]) cats[cat] = { color: CAT_COLORS[cat] || '#8a8580', tasks: [] };
     cats[cat].tasks.push({
-      id: parseInt(r.id) || Math.random() * 99999 | 0,
-      text: r.task || '',
-      done: String(r.done).toUpperCase() === 'TRUE',
-      v: String(r.verified_in_code).toUpperCase() === 'TRUE',
-      n: r.note || '',
-      est: parseFloat(r.est_hours) || 0,
-      priority: parseInt(r.priority) || 9
+      id: parseInt(id) || 0,
+      text: t.text || '',
+      done: !!t.done,
+      v: !!t.verified,
+      n: t.note || '',
+      est: parseFloat(t.est) || 0,
+      priority: parseInt(t.priority) || 9
     });
   }
   return cats;
 }
 
-// ============ FETCH FROM GOOGLE SHEET ============
-async function fetchSheet() {
-  if (!config || !config.sheetId) return false;
-  state.syncStatus = 'loading';
-  state.syncError = '';
-  render();
-
-  // Strategy: Try Apps Script (real-time data), then published CSV (cached)
-  const scriptUrl = config.webhookUrl || APPS_SCRIPT_URL;
-  const pubKey = config.pubKey || DEFAULT_PUB_KEY;
-  const gid = config.gid || DEFAULT_GID;
-
-  // 1. Try Apps Script GET (real-time, follows redirect)
-  if (scriptUrl) {
-    try {
-      console.log('Reading via Apps Script...');
-      const resp = await fetch(scriptUrl + '?action=read', { redirect: 'follow' });
-      if (resp.ok) {
-        const text = await resp.text();
-        const data = JSON.parse(text);
-        if (data.rows && data.rows.length > 0) {
-          const rows = data.rows.map(r => {
-            const nr = {};
-            for (const [k, v] of Object.entries(r)) {
-              nr[k] = typeof v === 'boolean' ? (v ? 'TRUE' : 'FALSE') : String(v);
-            }
-            return nr;
-          });
-          state.tasks = csvToTasks(rows);
-          state.syncStatus = 'ok';
-          state.syncError = '';
-          state.lastSync = Date.now();
-          cacheSheet(state.tasks);
-          render();
-          return true;
-        }
-      }
-    } catch (e) {
-      console.warn('Apps Script read failed:', e.message);
-    }
-  }
-
-  // 2. Fallback: Published CSV
-  const csvUrls = [];
-  if (pubKey) {
-    csvUrls.push(`https://docs.google.com/spreadsheets/d/e/${pubKey}/pub?gid=${gid}&single=true&output=csv`);
-  }
-  if (config.gid) {
-    csvUrls.push(`https://docs.google.com/spreadsheets/d/${config.sheetId}/gviz/tq?tqx=out:csv&gid=${config.gid}`);
-  }
-
-  for (const url of csvUrls) {
-    try {
-      console.log('Trying CSV:', url);
-      const resp = await fetch(url);
-      if (!resp.ok) continue;
-      const text = await resp.text();
-      if (text.startsWith('google.visualization') || text.startsWith('{')) continue;
-      const rows = parseCSV(text);
-      if (rows.length === 0) continue;
-      const firstRow = rows[0];
-      if (!firstRow.task && !firstRow.category && !firstRow.id) continue;
-      state.tasks = csvToTasks(rows);
-      state.syncStatus = 'ok';
-      state.syncError = '';
-      state.lastSync = Date.now();
-      cacheSheet(state.tasks);
-      render();
-      return true;
-    } catch (e) {
-      console.warn('CSV fetch failed:', url, e.message);
-    }
-  }
-
-  state.syncStatus = 'err';
-  state.syncError = 'לא הצלחתי לקרוא מהשיטס. בדוק שהשיטס מפורסם (Publish to web) ושה-Sheet ID נכון.';
-  render();
-  return false;
-}
-
-// ============ WRITE BACK VIA GOOGLE APPS SCRIPT ============
-async function updateTaskInSheet(id, field, value) {
-  const url = config?.webhookUrl || APPS_SCRIPT_URL;
-  if (!url) return;
-  const params = new URLSearchParams({ action: 'toggle', id: String(id), [field]: String(value) });
-  try {
-    const resp = await fetch(url + '?' + params.toString(), { redirect: 'follow' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json().catch(() => null);
-    if (data && data.error) throw new Error(data.error);
-  } catch (e) {
+function updateTaskInFirebase(id, updates) {
+  if (!db) return;
+  db.ref('tasks/' + id).update(updates).catch((e) => {
     console.error('Write failed:', e.message);
-    // Revert the local change on failure
-    for (let cat of Object.values(state.tasks)) {
-      for (let t of cat.tasks) {
-        if (t.id === id) {
-          t.done = !t.done;
-          cacheSheet(state.tasks);
-          render();
-          break;
-        }
-      }
-    }
     state.syncStatus = 'err';
     state.syncError = 'שמירה נכשלה: ' + e.message;
     render();
-  }
+  });
 }
 
 // ============ RENDER ============
 function render() {
   const app = document.getElementById('app');
 
-  if (state.showSetup || !config || !config.sheetId) {
+  if (state.showSetup || !config || !config.databaseURL) {
     app.innerHTML = `
     <div class="header"><h1>Manager Dashboard</h1><p>Setup</p></div>
     <div class="setup-box">
-      <h3>Google Sheet Connection</h3>
+      <h3>Firebase Connection</h3>
       <p style="color:var(--text-muted);font-size:12px;margin-bottom:14px">
-        1. Open the Sheet in Extensions > Apps Script<br>
-        2. Paste the Apps Script code and Deploy as Web App<br>
-        3. Paste the Web App URL below
+        1. Create a Firebase project at firebase.google.com<br>
+        2. Create a Realtime Database<br>
+        3. Copy the database URL and paste below
       </p>
-      <input id="cfg-sheet" placeholder="Sheet ID (from URL: /d/XXXXXX/edit)" value="${config?.sheetId || ''}">
-      <input id="cfg-gid" placeholder="Sheet GID (from URL: #gid=XXXX)" value="${config?.gid || ''}">
-      <input id="cfg-webhook" placeholder="Apps Script Web App URL (for read+write)" value="${config?.webhookUrl || ''}">
+      <input id="cfg-dburl" placeholder="Database URL (https://xxx.firebaseio.com)" value="${config?.databaseURL || ''}">
+      <input id="cfg-apikey" placeholder="API Key" value="${config?.apiKey || ''}">
+      <input id="cfg-projectid" placeholder="Project ID" value="${config?.projectId || ''}">
+      <input id="cfg-appid" placeholder="App ID" value="${config?.appId || ''}">
       <br><button class="btn btn-success" onclick="saveSetup()" style="margin-top:10px;width:100%;padding:10px">Connect</button>
+      ${Object.keys(state.tasks).length > 0 ? '<button class="btn btn-ghost" onclick="importFromCurrentData()" style="margin-top:8px;width:100%;padding:10px">Import from current data</button>' : ''}
     </div>`;
     return;
   }
@@ -599,9 +504,9 @@ function render() {
 </div>
 <div class="sync-bar">
   <div class="sync-status"><span class="sync-dot ${syncClass}"></span> ${syncClass === 'ok' ? 'Synced' : syncClass === 'loading' ? 'Loading...' : 'Sync error'} &middot; ${syncTime}</div>
-  <button class="btn btn-ghost btn-sm" onclick="fetchSheet()">Refresh</button>
+  <button class="btn btn-ghost btn-sm" onclick="location.reload()">Refresh</button>
 </div>
-${state.syncError ? `<div class="error-box">${state.syncError}<br><span style="color:var(--text-muted);font-size:10px;direction:ltr;display:block;margin-top:4px">Sheet ID: ${config?.sheetId || '?'} | GID: ${config?.gid || 'none'}</span></div>` : ''}
+${state.syncError ? `<div class="error-box">${state.syncError}<br><span style="color:var(--text-muted);font-size:10px;direction:ltr;display:block;margin-top:4px">DB: ${config?.databaseURL || '?'}</span></div>` : ''}
 <div class="stats">
   <div class="stat"><div class="stat-val" style="color:var(--blue)">${total}</div><div class="stat-lbl">Total</div></div>
   <div class="stat"><div class="stat-val" style="color:var(--success)">${done}</div><div class="stat-lbl">Done (${pct}%)</div></div>
@@ -694,14 +599,33 @@ ${state.syncError ? `<div class="error-box">${state.syncError}<br><span style="c
 
 // ============ ACTIONS ============
 function saveSetup() {
-  const sheetId = document.getElementById('cfg-sheet').value.trim();
-  const gid = document.getElementById('cfg-gid').value.trim();
-  const webhookUrl = document.getElementById('cfg-webhook').value.trim();
-  if (!sheetId) return alert('Missing Sheet ID');
-  config = { sheetId, gid, sheetName: '', webhookUrl, pubKey: DEFAULT_PUB_KEY };
+  const databaseURL = document.getElementById('cfg-dburl').value.trim();
+  const apiKey = document.getElementById('cfg-apikey').value.trim();
+  const projectId = document.getElementById('cfg-projectid').value.trim();
+  const appId = document.getElementById('cfg-appid').value.trim();
+  if (!databaseURL) return alert('Missing Database URL');
+  config = { databaseURL, apiKey, projectId, appId };
   state.showSetup = false;
   saveConfig();
-  fetchSheet();
+  initFirebase();
+}
+
+function importFromCurrentData() {
+  if (!config || !config.databaseURL) return alert('Connect to Firebase first');
+  if (!firebase.apps.length) initFirebase();
+  const tasksToImport = {};
+  for (const [cat, catData] of Object.entries(state.tasks)) {
+    for (const t of catData.tasks) {
+      tasksToImport[t.id] = {
+        text: t.text, done: t.done, verified: t.v || false,
+        note: t.n || '', est: t.est || 0, priority: t.priority || 9,
+        category: cat
+      };
+    }
+  }
+  firebase.database().ref('tasks').set(tasksToImport)
+    .then(() => { alert('Import successful!'); })
+    .catch(e => { alert('Import failed: ' + e.message); });
 }
 
 function resetConfig() {
@@ -714,9 +638,8 @@ function toggle(id) {
     for (let t of cat.tasks) {
       if (t.id === id) {
         t.done = !t.done;
-        cacheSheet(state.tasks);
-        updateTaskInSheet(id, 'done', t.done ? 'TRUE' : 'FALSE');
-        render();
+        render(); // Optimistic UI
+        updateTaskInFirebase(id, { done: t.done });
         return;
       }
     }
@@ -741,12 +664,9 @@ function delHours(id) { state.hours = state.hours.filter(e => e.id !== id); save
 // ============ INIT ============
 loadConfig();
 loadHours();
-if (config && config.sheetId) {
-  loadCache();
+if (config && config.databaseURL) {
   render();
-  fetchSheet();
-  // Auto-refresh every 30 seconds to sync across devices
-  setInterval(fetchSheet, 30000);
+  initFirebase();
 } else {
   render();
 }
