@@ -373,7 +373,7 @@ const CAT_COLORS = {
 };
 
 let config = null;
-let state = { tasks: {}, hours: [], filter: 'all', search: '', collapsed: {}, showHoursForm: false, showSetup: false, syncStatus: 'loading', syncError: '', lastSync: null };
+let state = { tasks: {}, hours: [], filter: 'all', search: '', collapsed: {}, showHoursForm: false, showSetup: false, showAddTask: false, syncStatus: 'loading', syncError: '', lastSync: null };
 
 const DEFAULT_DB_URL = 'https://manager-dashboard-b8627-default-rtdb.firebaseio.com';
 const DEFAULT_API_KEY = 'AIzaSyCYVWc3_hOJadijX6Ebclz5VCEWthhuw8w';
@@ -549,7 +549,23 @@ ${state.syncError ? `<div class="error-box">${state.syncError}<br><span style="c
   <button class="filter-btn ${state.filter === 'all' ? 'active' : ''}" onclick="setFilter('all')">All</button>
   <button class="filter-btn ${state.filter === 'open' ? 'active' : ''}" onclick="setFilter('open')">Open</button>
   <button class="filter-btn ${state.filter === 'done' ? 'active' : ''}" onclick="setFilter('done')">Done</button>
+  <button class="btn btn-ghost btn-sm" onclick="toggleAddTask()" style="margin-right:auto">+ Add task</button>
   </div>`;
+  if (state.showAddTask) {
+    const catOptions = Object.keys(CAT_COLORS).map(c => `<option value="${c}">${c}</option>`).join('');
+    h += `<div class="add-task-form" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px">
+    <input id="new-task-text" placeholder="תיאור המשימה..." style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;font-family:inherit;font-size:14px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="new-task-cat" onchange="document.getElementById('new-task-custom-cat').style.display=this.value==='__custom__'?'inline-block':'none'" style="padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:13px">
+        ${catOptions}
+        <option value="__custom__">+ קטגוריה חדשה</option>
+      </select>
+      <input id="new-task-custom-cat" placeholder="שם קטגוריה" style="display:none;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;width:140px">
+      <button class="btn btn-success btn-sm" onclick="addTask()" style="padding:6px 16px">Add</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleAddTask()">Cancel</button>
+    </div>
+    </div>`;
+  }
 
   // Categories
   for (let [cat, { color, tasks }] of Object.entries(state.tasks)) {
@@ -660,6 +676,24 @@ function addHours() {
   state.showHoursForm = false; saveHours(); render();
 }
 function delHours(id) { state.hours = state.hours.filter(e => e.id !== id); saveHours(); render(); }
+
+function toggleAddTask() { state.showAddTask = !state.showAddTask; render(); }
+function addTask() {
+  const text = document.getElementById('new-task-text').value.trim();
+  if (!text) return alert('הכנס תיאור למשימה');
+  const catSelect = document.getElementById('new-task-cat');
+  let cat = catSelect.value;
+  if (cat === '__custom__') {
+    cat = document.getElementById('new-task-custom-cat').value.trim();
+    if (!cat) return alert('הכנס שם קטגוריה');
+  }
+  if (!db) return alert('Firebase not connected');
+  const id = Date.now();
+  const taskData = { text, done: false, verified: false, note: '', est: 0, priority: 9, category: cat };
+  db.ref('tasks/' + id).set(taskData)
+    .then(() => { state.showAddTask = false; })
+    .catch(e => { alert('שגיאה: ' + e.message); });
+}
 
 // ============ INIT ============
 loadConfig();
