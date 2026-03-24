@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0f1117">
+<meta name="theme-color" content="#1a2035">
 <title>בקרה ומעקב Terminal OpS</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Heebo:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0f1117;
-  --bg-raised: #161921;
-  --bg-card: rgba(22, 25, 33, 0.8);
-  --bg-card-hover: rgba(26, 30, 40, 0.9);
-  --bg-input: #1a1d27;
-  --border: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
+  --bg: #1a2035;
+  --bg-raised: #222b42;
+  --bg-card: rgba(34, 43, 66, 0.85);
+  --bg-card-hover: rgba(38, 48, 74, 0.9);
+  --bg-input: #1e2840;
+  --border: rgba(100, 140, 220, 0.1);
+  --border-hover: rgba(100, 140, 220, 0.2);
   --border-accent: rgba(99, 130, 237, 0.4);
   --text: #e4e7ef;
   --text-secondary: #8b90a0;
@@ -985,9 +985,12 @@ function initFirebase() {
 
   db.ref('tasks').on('value', (snap) => {
     const data = snap.val() || {};
-    // Separate config from tasks
+    // Separate config from tasks — only update if present, never clear
     if (data[CONFIG_KEY]) {
-      state.groups = data[CONFIG_KEY].groups || [];
+      const fbGroups = data[CONFIG_KEY].groups || [];
+      if (fbGroups.length > 0 || state.groups.length === 0) {
+        state.groups = fbGroups;
+      }
       delete data[CONFIG_KEY];
     }
     state.tasks = Object.entries(data).map(([id, t]) => ({
