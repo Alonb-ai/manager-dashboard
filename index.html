@@ -5,22 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#131a2b">
+<meta name="theme-color" content="#1a2035">
 <title>בקרה ומעקב Terminal OpS</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Heebo:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #131a2b;
-  --bg-raised: #1e2a45;
-  --bg-card: #1e2a45;
-  --bg-card-hover: #243252;
-  --bg-input: #172137;
-  --border: rgba(100, 150, 240, 0.12);
-  --border-hover: rgba(100, 150, 240, 0.25);
+  --bg: #1a2035;
+  --bg-raised: #263354;
+  --bg-card: #253050;
+  --bg-card-hover: #2a3760;
+  --bg-input: #1e2840;
+  --border: rgba(100, 150, 240, 0.14);
+  --border-hover: rgba(100, 150, 240, 0.28);
   --border-accent: rgba(99, 130, 237, 0.4);
   --text: #e4e7ef;
-  --text-secondary: #8b90a0;
-  --text-muted: #5c6070;
+  --text-secondary: #a0a8be;
+  --text-muted: #788098;
   --accent: #6382ed;
   --accent-soft: rgba(99, 130, 237, 0.12);
   --accent-hover: rgba(99, 130, 237, 0.2);
@@ -246,8 +246,8 @@ body::before {
 .search::placeholder { color: var(--text-muted); }
 
 .filter-btn {
-  background: #243252;
-  color: var(--text-muted);
+  background: #263354;
+  color: var(--text-secondary);
   border: 1px solid rgba(100, 150, 240, 0.18);
   border-radius: 20px;
   padding: 6px 14px;
@@ -286,6 +286,8 @@ body::before {
   cursor: pointer;
   transition: background var(--transition);
   border-bottom: 1px solid transparent;
+  text-align: right;
+  direction: rtl;
 }
 .group-header:hover { background: rgba(255,255,255,0.02); }
 .group-header.expanded { border-bottom-color: var(--border); }
@@ -947,10 +949,10 @@ function getGlobalTaskStatus(task) {
   // If ungrouped, use task.status
   const gids = task.groupIds || [];
   if (gids.length === 0) return task.status || 0;
-  const allDone = gids.every(gid => {
-    return (task.statusInGroups && task.statusInGroups[gid] === 2);
-  });
-  return allDone ? 2 : 0;
+  const statuses = gids.map(gid => (task.statusInGroups && task.statusInGroups[gid]) || 0);
+  if (statuses.every(s => s === 2)) return 2;
+  if (statuses.some(s => s >= 1)) return 1;
+  return 0;
 }
 
 function getStatusClass(s) {
@@ -1452,8 +1454,8 @@ function cycleTaskStatus(id, groupId) {
     t.statusInGroups = sig;
 
     // Update global status: if all groups are done => status=2, else keep as-is
-    const allDone = (t.groupIds || []).every(gid => sig[gid] === 2);
-    t.status = allDone ? 2 : 0;
+    const statuses = (t.groupIds || []).map(gid => sig[gid] || 0);
+    t.status = statuses.every(s => s === 2) ? 2 : statuses.some(s => s >= 1) ? 1 : 0;
 
     render();
     saveTask(id, { statusInGroups: sig, status: t.status });
