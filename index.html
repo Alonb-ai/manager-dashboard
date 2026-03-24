@@ -350,18 +350,14 @@ body::before {
   gap: 2px;
   align-items: center;
 }
-.group-order-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 4px 5px;
-  transition: color var(--transition);
-  font-family: inherit;
-  border-radius: 4px;
+.group-drag-handle {
+  cursor: grab; color: var(--text-muted); padding: 4px 6px;
+  transition: color var(--transition); display: flex; align-items: center;
+  -webkit-user-select: none; user-select: none; font-size: 11px; letter-spacing: 1px;
 }
-.group-order-btn:hover { color: var(--accent); background: var(--accent-soft); }
+.group-drag-handle:hover { color: var(--text-secondary); }
+.group-drag-handle:active { cursor: grabbing; }
+.group.dragging-group { opacity: 0.35; border-style: dashed; border-color: var(--accent); }
 .group-btn-icon {
   background: none;
   border: none;
@@ -831,7 +827,7 @@ body::before {
   .task-icon-btn { font-size: 16px; padding: 6px; min-width: 32px; min-height: 32px; display: flex; align-items: center; justify-content: center; }
   .tag, .tag-add, .deadline-tag, .deadline-set, .group-tag { padding: 4px 10px; font-size: 11px; min-height: 26px; display: inline-flex; align-items: center; }
   .group-assign-btn { min-height: 34px; padding: 6px 12px; }
-  .group-order-btn { padding: 6px 8px; font-size: 14px; }
+  .group-drag-handle { padding: 6px 8px; font-size: 16px; }
   .group-btn-icon { padding: 6px 8px; font-size: 15px; }
 }
 </style>
@@ -1246,9 +1242,10 @@ function renderGroup(g) {
   const sid = esc(g.id);
   const gIdx = state.groups.findIndex(x => x.id === g.id);
 
-  let h = `<div class="group ${state.dragOverGroup === g.id ? 'drag-over' : ''}" data-group="${sid}"
+  let h = `<div class="group ${state.dragOverGroup === g.id ? 'drag-over' : ''}" data-group="${sid}" data-group-id="${sid}"
     ondragover="onDragOver(event,'${sid}')" ondragleave="onDragLeave(event)" ondrop="onDrop(event,'${sid}')">
     <div class="group-header ${!isCol ? 'expanded' : ''}" onclick="toggleGroup('${sid}')">
+      <span class="group-drag-handle" draggable="true" ondragstart="onGroupDragStart(event,'${sid}')" ondragend="onGroupDragEnd(event)" onclick="event.stopPropagation()" title="גרור לשינוי סדר">⠿</span>
       <div class="group-title">
         <span class="arrow" style="transform:rotate(${isCol ? '-90' : '0'}deg)">&#9662;</span>
         <span class="group-color-bar" style="background:${g.color}"></span>`;
@@ -1268,8 +1265,6 @@ function renderGroup(g) {
         <span class="group-pct">${stats.pct}%</span>
       </div>
       <div class="group-actions" onclick="event.stopPropagation()">
-        ${gIdx > 0 ? `<button class="group-order-btn" onclick="moveGroup('${sid}',-1)" title="הזז למעלה">&#9650;</button>` : ''}
-        ${gIdx < state.groups.length - 1 ? `<button class="group-order-btn" onclick="moveGroup('${sid}',1)" title="הזז למטה">&#9660;</button>` : ''}
         <button class="group-btn-icon" onclick="startEditGroup('${sid}')" title="שנה שם">&#9998;</button>
         <button class="group-btn-icon danger" onclick="deleteGroup('${sid}')" title="מחק">&#10005;</button>
       </div>
@@ -1664,6 +1659,29 @@ function moveGroup(id, dir) {
   render();
 }
 
+// ============ GROUP DRAG (reorder) ============
+let dragGroupId = null;
+
+function onGroupDragStart(e, groupId) {
+  dragGroupId = groupId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('application/group', groupId);
+  e.stopPropagation();
+  setTimeout(() => {
+    const el = document.querySelector('[data-group-id="' + groupId + '"]');
+    if (el) el.classList.add('dragging-group');
+  }, 0);
+}
+
+function onGroupDragEnd(e) {
+  dragGroupId = null;
+  document.querySelectorAll('.group.dragging-group').forEach(el => el.classList.remove('dragging-group'));
+  document.querySelectorAll('.group.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+
+// Override onDragOver/onDrop to handle group reorder when dragging a group
+const origOnDrop = null; // will modify onDrop below
+
 // ============ DRAG & DROP (Desktop) ============
 function onTaskDragStart(e, taskId) {
   state.dragTaskId = taskId;
@@ -1703,6 +1721,23 @@ function onDragLeave(e) {
 
 function onDrop(e, groupId) {
   e.preventDefault();
+
+  // Check if this is a group reorder drop
+  if (dragGroupId) {
+    const fromIdx = state.groups.findIndex(g => g.id === dragGroupId);
+    const toIdx = state.groups.findIndex(g => g.id === groupId);
+    if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+      const [moved] = state.groups.splice(fromIdx, 1);
+      state.groups.splice(toIdx, 0, moved);
+      saveGroupsConfig();
+    }
+    dragGroupId = null;
+    document.querySelectorAll('.group.dragging-group').forEach(el => el.classList.remove('dragging-group'));
+    document.querySelectorAll('.group.drag-over').forEach(el => el.classList.remove('drag-over'));
+    render();
+    return;
+  }
+
   const taskId = state.dragTaskId || e.dataTransfer.getData('text/plain');
   if (!taskId) return;
   const t = state.tasks.find(x => x.id === taskId);
@@ -1729,18 +1764,37 @@ function onDrop(e, groupId) {
 
 // ============ TOUCH DRAG (Mobile) ============
 let touchDragId = null;
+let touchDragGroupId = null;
 let touchGhost = null;
 
 document.addEventListener('touchstart', (e) => {
+  // Group drag handle
+  const handleEl = e.target.closest('.group-drag-handle');
+  if (handleEl) {
+    const groupEl = handleEl.closest('.group[data-group-id]');
+    if (groupEl) {
+      touchDragGroupId = groupEl.dataset.groupId;
+      groupEl.style.opacity = '0.35';
+      touchGhost = document.createElement('div');
+      const nameEl = groupEl.querySelector('.group-title .name');
+      touchGhost.textContent = nameEl ? nameEl.textContent : '';
+      touchGhost.style.cssText = 'position:fixed;z-index:9999;padding:8px 14px;background:rgba(99,130,237,0.2);color:var(--accent);border:1px solid rgba(99,130,237,0.4);border-radius:8px;font-size:13px;font-weight:500;pointer-events:none;max-width:200px;white-space:nowrap;overflow:hidden;font-family:Heebo,sans-serif;direction:rtl;backdrop-filter:blur(8px);';
+      const touch = e.touches[0];
+      touchGhost.style.left = (touch.clientX - 20) + 'px';
+      touchGhost.style.top = (touch.clientY - 20) + 'px';
+      document.body.appendChild(touchGhost);
+      return;
+    }
+  }
+
+  // Task drag
   const taskEl = e.target.closest('.task[data-task-id]');
   if (!taskEl) return;
-  // Ignore touches on interactive elements
   if (e.target.closest('input,button,select,textarea,.tag,.tag-add,.deadline-set,.deadline-tag,.task-icon-btn,.group-tag,.group-assign-btn,.status-btn')) return;
 
   touchDragId = taskEl.dataset.taskId;
   taskEl.style.opacity = '0.3';
 
-  // Create ghost element
   touchGhost = document.createElement('div');
   touchGhost.textContent = taskEl.querySelector('.task-text')?.textContent || '';
   touchGhost.style.cssText = 'position:fixed;z-index:9999;padding:8px 14px;background:rgba(99,130,237,0.15);color:var(--accent);border:1px solid rgba(99,130,237,0.4);border-radius:8px;font-size:12px;pointer-events:none;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:Heebo,sans-serif;direction:rtl;backdrop-filter:blur(8px);';
@@ -1751,12 +1805,11 @@ document.addEventListener('touchstart', (e) => {
 }, { passive: true });
 
 document.addEventListener('touchmove', (e) => {
-  if (!touchDragId || !touchGhost) return;
+  if ((!touchDragId && !touchDragGroupId) || !touchGhost) return;
   const touch = e.touches[0];
   touchGhost.style.left = (touch.clientX - 20) + 'px';
   touchGhost.style.top = (touch.clientY - 20) + 'px';
 
-  // Highlight group under finger
   const el = document.elementFromPoint(touch.clientX, touch.clientY);
   const groupEl = el?.closest('.group[data-group]');
   document.querySelectorAll('.group.drag-over').forEach(g => g.classList.remove('drag-over'));
@@ -1764,13 +1817,32 @@ document.addEventListener('touchmove', (e) => {
 }, { passive: true });
 
 document.addEventListener('touchend', (e) => {
-  if (!touchDragId) return;
-
   const touch = e.changedTouches[0];
   const el = document.elementFromPoint(touch.clientX, touch.clientY);
   const groupEl = el?.closest('.group[data-group]');
 
-  if (groupEl) {
+  // Group reorder
+  if (touchDragGroupId) {
+    if (groupEl) {
+      const targetId = groupEl.dataset.group || groupEl.dataset.groupId;
+      const fromIdx = state.groups.findIndex(g => g.id === touchDragGroupId);
+      const toIdx = state.groups.findIndex(g => g.id === targetId);
+      if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+        const [moved] = state.groups.splice(fromIdx, 1);
+        state.groups.splice(toIdx, 0, moved);
+        saveGroupsConfig();
+      }
+    }
+    document.querySelectorAll('.group').forEach(el => el.style.opacity = '');
+    document.querySelectorAll('.group.drag-over').forEach(g => g.classList.remove('drag-over'));
+    if (touchGhost) { touchGhost.remove(); touchGhost = null; }
+    touchDragGroupId = null;
+    render();
+    return;
+  }
+
+  // Task drop
+  if (touchDragId && groupEl) {
     const groupId = groupEl.dataset.group;
     const t = state.tasks.find(x => x.id === touchDragId);
     if (t) {
